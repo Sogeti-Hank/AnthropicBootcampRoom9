@@ -17,8 +17,24 @@ from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
 MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human takes over.
 
 TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence goal
-EXTRA_TOOLS: List[Dict[str, Any]] = []   # ✏️ Build 2, step 2.1: schemas for the tools you add
-LOCAL_TOOLS: Dict[str, Any] = {}         # ✏️ Build 2, step 2.1: the functions behind them
+EXTRA_TOOLS: List[Dict[str, Any]] = [     # ✏️ Build 2, step 2.1: schemas for the tools you add
+    {
+        "name": "next_available_day",
+        "description": (
+            "Use this when a passenger needs to schedule a flight on a future date from the one they chose that is sold out."  # <- YOUR SENTENCE: when should Claude call this, what does it answer
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "origin": {"type": "string"},
+                "dest": {"type": "string"},
+                "date": {"type": "string", "description": "the date the passenger wanted to fly"},  # <- YOUR SENTENCE: what does this date mean to the caller?
+            },
+            "required": ["origin", "dest", "date"],
+        },
+    },
+]
+LOCAL_TOOLS: Dict[str, Any] = {"next_available_day": next_available_day}  # ✏️ Build 2, step 2.1: the functions behind them
 
 
 def text_of(response) -> str:
@@ -119,14 +135,19 @@ def build_tools() -> List[Dict[str, Any]]:                 # ✏️ Build 1, ste
                 "type": "object",
                 "properties": {
                     "flight_no": {"type": "string"},
-                    "date": {"type": "string", "description": "MM/DD/YYYY"},
+                    "date": {"type": "string", "description": "YYYY-MM-DD"},
                 },
                 "required": ["flight_no", "date"],
             },
         },
         {
             "name": "search_alternatives",
-            "description": "search",
+            "description": (
+                "Find rebookable flights for the disrupted segment on this booking: same "
+                "origin, destination, cabin, and passenger count, on the affected date. Use "
+                "this after get_flight_status shows a delay or cancellation, to see what "
+                "options exist before offering one or calling hold_seat."
+            ),
             "input_schema": {
                 "type": "object",
                 "properties": {"pnr": {"type": "string"}},
